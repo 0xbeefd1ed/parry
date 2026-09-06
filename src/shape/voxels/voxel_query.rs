@@ -63,25 +63,6 @@ pub trait VoxelQuery {
     /// range, but the range may also cover empty voxels.
     fn domain(&self) -> [IVector; 2];
 
-    /// The voxel at the given grid coordinates, or `None` if the storage holds nothing
-    /// there (empty voxel, or coordinates outside the tracked domain).
-    ///
-    /// Implementations should return `None` for empty voxels rather than a view whose
-    /// [`QueriedVoxel::voxel_type`] is [`VoxelType::Empty`]: the provided
-    /// [`Self::derive_voxel_state`] treats any `Some` as a filled voxel. Callers, on the
-    /// other hand, must treat `None` and empty-typed views the same.
-    fn voxel(&self, key: IVector) -> Option<Self::Voxel<'_>>;
-
-    /// A stable identifier of the voxel at the given grid coordinates.
-    ///
-    /// The identifier must be unique among the currently stored voxels and must match the
-    /// value of [`VoxelData::linear_id`] yielded by [`Self::voxels_in_range`] for the same
-    /// voxel. It is used to build [`FeatureId`](crate::shape::FeatureId)s in query results
-    /// and to match contact points across frames, so it should remain stable as long as the
-    /// shape isn't modified. Returns `None` if no identifier is associated to this
-    /// coordinate (e.g. empty voxel in unallocated storage).
-    fn linear_id(&self, key: IVector) -> Option<u32>;
-
     /// Iterates through the voxels within the given semi-open grid coordinate range.
     ///
     /// Implementations must yield every non-empty voxel with grid coordinates in
@@ -230,24 +211,6 @@ impl VoxelQuery for Voxels {
     #[inline]
     fn domain(&self) -> [IVector; 2] {
         self.domain()
-    }
-
-    #[inline]
-    fn voxel(&self, key: IVector) -> Option<VoxelData> {
-        let id = self.linear_index(key)?;
-        let state = self.chunks[id.chunk_id].states[id.id_in_chunk];
-        // Tracked-but-empty voxels (allocated chunk, empty cell) read as `None` too.
-        (!state.is_empty()).then(|| VoxelData {
-            linear_id: id.flat_id() as u32,
-            grid_coords: key,
-            center: self.voxel_center(key),
-            state,
-        })
-    }
-
-    #[inline]
-    fn linear_id(&self, key: IVector) -> Option<u32> {
-        self.linear_index(key).map(|id| id.flat_id() as u32)
     }
 
     #[inline]

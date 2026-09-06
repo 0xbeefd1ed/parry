@@ -2,7 +2,7 @@ use crate::mass_properties::MassProperties;
 #[cfg(feature = "dim3")]
 use crate::math::Matrix;
 use crate::math::{Real, Vector};
-use crate::shape::{QueriedVoxel, VoxelQuery, VoxelType};
+use crate::shape::{QueriedVoxel, VoxelQuery, VoxelType, Voxels};
 
 impl MassProperties {
     /// Computes the mass properties of a voxel grid.
@@ -174,7 +174,7 @@ impl MassProperties {
     /// - `Voxels::set_voxel()`: Add or remove voxels
     /// - `from_trimesh()`: Alternative for precise shapes
     /// - `from_compound()`: Combine multiple shapes efficiently
-    pub fn from_voxels<V: ?Sized + VoxelQuery>(density: Real, voxels: &V) -> Self {
+    pub fn from_voxels(density: Real, voxels: &Voxels) -> Self {
         let mut com = Vector::ZERO;
         let mut num_not_empty = 0;
         #[cfg(feature = "dim2")]
