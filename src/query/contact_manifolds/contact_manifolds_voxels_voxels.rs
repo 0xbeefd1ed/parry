@@ -6,7 +6,7 @@ use crate::query::{
     ContactManifold, ContactManifoldsWorkspace, PersistentQueryDispatcher, PointQuery,
     TypedWorkspaceData, WorkspaceData,
 };
-use crate::shape::{Cuboid, Shape, SupportMap, VoxelData, VoxelType, Voxels};
+use crate::shape::{Cuboid, Shape, SupportMap, VoxelData, VoxelQuery, VoxelType};
 use crate::utils::hashmap::Entry;
 use crate::utils::PoseOpt;
 use alloc::{boxed::Box, vec::Vec};
@@ -41,18 +41,22 @@ pub fn contact_manifolds_voxels_voxels_shapes<ManifoldData, ContactData>(
     }
 }
 
-/// Computes the contact manifold between a convex shape and a ball.
-pub fn contact_manifolds_voxels_voxels<'a, ManifoldData, ContactData>(
+/// Computes the contact manifold between two voxels shapes.
+///
+/// The voxels shapes can be any voxel storages implementing [`VoxelQuery`].
+pub fn contact_manifolds_voxels_voxels<'a, ManifoldData, ContactData, V1, V2>(
     dispatcher: &dyn PersistentQueryDispatcher<ManifoldData, ContactData>,
     pos12: &Pose,
-    voxels1: &'a Voxels,
-    voxels2: &'a Voxels,
+    voxels1: &'a V1,
+    voxels2: &'a V2,
     prediction: Real,
     manifolds: &mut Vec<ContactManifold<ManifoldData, ContactData>>,
     workspace: &mut Option<ContactManifoldsWorkspace>,
 ) where
     ManifoldData: Default + Clone,
     ContactData: Default + Copy,
+    V1: ?Sized + VoxelQuery,
+    V2: ?Sized + VoxelQuery,
 {
     VoxelsShapeContactManifoldsWorkspace::<4>::ensure_exists(workspace);
     let workspace: &mut VoxelsShapeContactManifoldsWorkspace<4> =
@@ -77,11 +81,17 @@ pub fn contact_manifolds_voxels_voxels<'a, ManifoldData, ContactData>(
         aabb1.aligned_intersections(pos12, &aabb2)
     {
         let domain_margin = (radius1 + radius2) * 10.0;
-        let full_domain2_1 = voxels2.compute_aabb(pos12).add_half_extents(domain_margin);
+        let full_domain2_1 = voxels2
+            .local_aabb()
+            .transform_by(pos12)
+            .add_half_extents(domain_margin);
         let domain2_1 = full_domain2_1
             .intersection(&aabb1.add_half_extents(domain_margin))
             .unwrap_or(full_domain2_1);
-        let full_domain1_2 = voxels1.compute_aabb(&pos21).add_half_extents(domain_margin);
+        let full_domain1_2 = voxels1
+            .local_aabb()
+            .transform_by(&pos21)
+            .add_half_extents(domain_margin);
         let domain1_2 = full_domain1_2
             .intersection(&aabb2.add_half_extents(domain_margin))
             .unwrap_or(full_domain1_2);
@@ -129,8 +139,8 @@ pub fn contact_manifolds_voxels_voxels<'a, ManifoldData, ContactData>(
                         };
 
                         manifolds.push(ContactManifold::with_data(
-                            vox1.linear_id.flat_id() as u32,
-                            vox2.linear_id.flat_id() as u32,
+                            vox1.linear_id,
+                            vox2.linear_id,
                             ManifoldData::default(),
                         ));
 

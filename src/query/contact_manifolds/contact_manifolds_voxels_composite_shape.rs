@@ -7,7 +7,7 @@ use crate::query::{
     ContactManifold, ContactManifoldsWorkspace, PersistentQueryDispatcher, PointQuery,
     TypedWorkspaceData, WorkspaceData,
 };
-use crate::shape::{CompositeShape, Cuboid, Shape, SupportMap, VoxelType, Voxels};
+use crate::shape::{CompositeShape, Cuboid, Shape, SupportMap, VoxelQuery, VoxelType};
 use crate::utils::hashmap::Entry;
 use crate::utils::PoseOpt;
 use alloc::{boxed::Box, vec::Vec};
@@ -55,10 +55,12 @@ pub fn contact_manifolds_voxels_composite_shape_shapes<ManifoldData, ContactData
 }
 
 /// Computes the contact manifold between voxels and a composite shape.
-pub fn contact_manifolds_voxels_composite_shape<ManifoldData, ContactData>(
+///
+/// The voxels shape can be any voxel storage implementing [`VoxelQuery`].
+pub fn contact_manifolds_voxels_composite_shape<ManifoldData, ContactData, V>(
     dispatcher: &dyn PersistentQueryDispatcher<ManifoldData, ContactData>,
     pos12: &Pose,
-    voxels1: &Voxels,
+    voxels1: &V,
     shape2: &dyn CompositeShape,
     prediction: Real,
     manifolds: &mut Vec<ContactManifold<ManifoldData, ContactData>>,
@@ -67,6 +69,7 @@ pub fn contact_manifolds_voxels_composite_shape<ManifoldData, ContactData>(
 ) where
     ManifoldData: Default + Clone,
     ContactData: Default + Copy,
+    V: ?Sized + VoxelQuery,
 {
     VoxelsShapeContactManifoldsWorkspace::<3>::ensure_exists(workspace);
     let workspace: &mut VoxelsShapeContactManifoldsWorkspace<3> =
@@ -135,7 +138,7 @@ pub fn contact_manifolds_voxels_composite_shape<ManifoldData, ContactData>(
                                 timestamp: new_timestamp,
                             };
 
-                            let vox_id = vox1.linear_id.flat_id() as u32;
+                            let vox_id = vox1.linear_id;
                             let (id1, id2) = if flipped {
                                 (leaf2, vox_id)
                             } else {

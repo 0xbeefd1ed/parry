@@ -2,7 +2,7 @@ use crate::bounding_volume::BoundingVolume;
 use crate::math::{Pose, Real, Vector, VectorExt};
 use crate::query::{ContactManifold, PointQuery, TrackedContact};
 use crate::shape::{
-    Ball, Cuboid, OctantPattern, PackedFeatureId, Shape, VoxelState, VoxelType, Voxels,
+    Ball, Cuboid, OctantPattern, PackedFeatureId, Shape, VoxelQuery, VoxelState, VoxelType,
 };
 use alloc::vec::Vec;
 
@@ -31,10 +31,12 @@ pub fn contact_manifolds_voxels_ball_shapes<ManifoldData, ContactData>(
     }
 }
 
-/// Computes the contact manifold between a convex shape and a ball.
-pub fn contact_manifolds_voxels_ball<'a, ManifoldData, ContactData>(
+/// Computes the contact manifold between a voxels shape and a ball.
+///
+/// The voxels shape can be any voxel storage implementing [`VoxelQuery`].
+pub fn contact_manifolds_voxels_ball<'a, ManifoldData, ContactData, V>(
     pos12: &Pose,
-    voxels1: &'a Voxels,
+    voxels1: &'a V,
     ball2: &'a Ball,
     prediction: Real,
     manifolds: &mut Vec<ContactManifold<ManifoldData, ContactData>>,
@@ -42,6 +44,7 @@ pub fn contact_manifolds_voxels_ball<'a, ManifoldData, ContactData>(
 ) where
     ManifoldData: Default,
     ContactData: Default + Copy,
+    V: ?Sized + VoxelQuery,
 {
     // TODO: don’t generate one manifold per voxel.
     manifolds.clear();

@@ -259,7 +259,8 @@ impl<'a> VoxelsChunkRef<'a> {
                     linear_id: VoxelIndex {
                         chunk_id: self.my_id,
                         id_in_chunk,
-                    },
+                    }
+                    .flat_id() as u32,
                     grid_coords,
                     center,
                     state,
@@ -303,7 +304,8 @@ impl<'a> VoxelsChunkRef<'a> {
                         linear_id: VoxelIndex {
                             chunk_id: self.my_id,
                             id_in_chunk,
-                        },
+                        }
+                        .flat_id() as u32,
                         grid_coords,
                         center,
                         state,

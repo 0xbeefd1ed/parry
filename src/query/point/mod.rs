@@ -4,6 +4,8 @@
 pub use self::point_query::{PointProjection, PointQuery, PointQueryWithLocation};
 #[cfg(feature = "alloc")]
 pub use self::point_support_map::local_point_projection_on_support_map;
+#[cfg(feature = "alloc")]
+pub use self::point_voxels::project_local_point_on_voxels;
 
 mod point_aabb;
 mod point_ball;

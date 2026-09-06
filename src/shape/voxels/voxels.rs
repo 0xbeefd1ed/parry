@@ -228,6 +228,41 @@ impl VoxelState {
         Self(state)
     }
 
+    /// The state of a **non-empty** voxel given the set of its non-empty axis-aligned neighbors.
+    ///
+    /// This is mostly useful for implementing [`VoxelQuery`](crate::shape::VoxelQuery) on a
+    /// custom voxel storage that only tracks per-voxel occupancy: the [`VoxelState`] of a filled
+    /// voxel is fully determined by which of its (up to 6 in 3D, 4 in 2D) immediate neighbors
+    /// along the coordinate axes are filled.
+    ///
+    /// Passing a mask with every axis direction set yields [`VoxelState::INTERIOR`]. Note that
+    /// the state of an *empty* voxel is always [`VoxelState::EMPTY`], regardless of its
+    /// neighborhood.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # #[cfg(all(feature = "dim3", feature = "f32"))] {
+    /// use parry3d::shape::{AxisMask, VoxelState, VoxelType};
+    ///
+    /// // A voxel with filled neighbors in every direction is an interior voxel.
+    /// let state = VoxelState::with_filled_neighbors(AxisMask::all());
+    /// assert_eq!(state, VoxelState::INTERIOR);
+    ///
+    /// // A voxel from a flat ground layer: neighbors on ±x and ±z, nothing above or below.
+    /// let state = VoxelState::with_filled_neighbors(
+    ///     AxisMask::X_POS | AxisMask::X_NEG | AxisMask::Z_POS | AxisMask::Z_NEG,
+    /// );
+    /// assert_eq!(state.voxel_type(), VoxelType::Face);
+    /// assert_eq!(state.free_faces(), AxisMask::Y_POS | AxisMask::Y_NEG);
+    /// # }
+    /// ```
+    pub const fn with_filled_neighbors(filled_neighbors: AxisMask) -> Self {
+        // The `AxisMask` bits match the internal neighborhood bit layout:
+        // bit `2 * axis` is the positive direction, bit `2 * axis + 1` the negative one.
+        Self(filled_neighbors.bits())
+    }
+
     /// Is this voxel empty?
     pub const fn is_empty(self) -> bool {
         self.0 == EMPTY_FACE_MASK
@@ -293,11 +328,13 @@ impl VoxelState {
 /// ```
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub struct VoxelData {
-    /// The temporary index in the internal voxels' storage.
+    /// A stable, storage-defined identifier of this voxel.
     ///
-    /// This index can be invalidated after a call to [`Voxels::set_voxel`], or
-    /// [`Voxels::crop`].
-    pub linear_id: VoxelIndex,
+    /// For the [`Voxels`] shape this is the flattened form of [`Voxels::linear_index`].
+    /// This identifier can be invalidated after the voxels shape is modified (e.g. by a call
+    /// to [`Voxels::set_voxel`], or [`Voxels::crop`]).
+    /// For stable references to voxels, always use `grid_coords`.
+    pub linear_id: u32,
     /// The voxel's integer grid coordinates.
     pub grid_coords: IVector,
     /// The voxel's center position in the local-space of the [`Voxels`] shape it is part of.

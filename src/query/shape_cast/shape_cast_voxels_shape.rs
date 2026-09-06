@@ -1,18 +1,21 @@
 use crate::math::{IVector, IVectorExt, Pose, Real, Vector, VectorExt};
 use crate::query::{QueryDispatcher, ShapeCastHit, ShapeCastOptions};
-use crate::shape::{Cuboid, Shape, Voxels};
+use crate::shape::{Cuboid, Shape, VoxelQuery};
 
 /// Time Of Impact of a voxels shape with any other shape, under a translational movement.
-pub fn cast_shapes_voxels_shape<D>(
+///
+/// The voxels shape can be any voxel storage implementing [`VoxelQuery`].
+pub fn cast_shapes_voxels_shape<D, V>(
     dispatcher: &D,
     pos12: &Pose,
     vel12: Vector,
-    g1: &Voxels,
+    g1: &V,
     g2: &dyn Shape,
     options: ShapeCastOptions,
 ) -> Option<ShapeCastHit>
 where
     D: ?Sized + QueryDispatcher,
+    V: ?Sized + VoxelQuery,
 {
     use num_traits::Bounded;
 
@@ -133,17 +136,20 @@ where
     hit
 }
 
-/// Time Of Impact of any shape with a composite shape, under a rigid motion (translation + rotation).
-pub fn cast_shapes_shape_voxels<D>(
+/// Time Of Impact of any shape with a voxels shape, under a translational movement.
+///
+/// The voxels shape can be any voxel storage implementing [`VoxelQuery`].
+pub fn cast_shapes_shape_voxels<D, V>(
     dispatcher: &D,
     pos12: &Pose,
     vel12: Vector,
     g1: &dyn Shape,
-    g2: &Voxels,
+    g2: &V,
     options: ShapeCastOptions,
 ) -> Option<ShapeCastHit>
 where
     D: ?Sized + QueryDispatcher,
+    V: ?Sized + VoxelQuery,
 {
     cast_shapes_voxels_shape(
         dispatcher,

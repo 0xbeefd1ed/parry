@@ -4,7 +4,7 @@ use crate::query::{
     ContactManifold, ContactManifoldsWorkspace, PersistentQueryDispatcher, PointQuery,
     TypedWorkspaceData, WorkspaceData,
 };
-use crate::shape::{AxisMask, Cuboid, Shape, SupportMap, VoxelData, VoxelType, Voxels};
+use crate::shape::{AxisMask, Cuboid, Shape, SupportMap, VoxelData, VoxelQuery, VoxelType};
 use crate::utils::hashmap::{Entry, HashMap};
 use crate::utils::PoseOpt;
 use alloc::{boxed::Box, vec::Vec};
@@ -113,10 +113,12 @@ pub fn contact_manifolds_voxels_shape_shapes<ManifoldData, ContactData>(
 }
 
 /// Computes the contact manifold between a convex shape and a voxels shape.
-pub fn contact_manifolds_voxels_shape<ManifoldData, ContactData>(
+///
+/// The voxels shape can be any voxel storage implementing [`VoxelQuery`].
+pub fn contact_manifolds_voxels_shape<ManifoldData, ContactData, V>(
     dispatcher: &dyn PersistentQueryDispatcher<ManifoldData, ContactData>,
     pos12: &Pose,
-    voxels1: &Voxels,
+    voxels1: &V,
     shape2: &dyn Shape,
     prediction: Real,
     manifolds: &mut Vec<ContactManifold<ManifoldData, ContactData>>,
@@ -125,6 +127,7 @@ pub fn contact_manifolds_voxels_shape<ManifoldData, ContactData>(
 ) where
     ManifoldData: Default + Clone,
     ContactData: Default + Copy,
+    V: ?Sized + VoxelQuery,
 {
     VoxelsShapeContactManifoldsWorkspace::<2>::ensure_exists(workspace);
     let workspace: &mut VoxelsShapeContactManifoldsWorkspace<2> =
@@ -185,7 +188,7 @@ pub fn contact_manifolds_voxels_shape<ManifoldData, ContactData>(
                             timestamp: new_timestamp,
                         };
 
-                        let vid = vox1.linear_id.flat_id() as u32;
+                        let vid = vox1.linear_id;
                         let (id1, id2) = if flipped { (0, vid) } else { (vid, 0) };
                         manifolds.push(ContactManifold::with_data(
                             id1,
@@ -334,7 +337,7 @@ pub(crate) struct CanonicalVoxelShape {
 }
 
 impl CanonicalVoxelShape {
-    pub fn from_voxel(voxels: &Voxels, vox: &VoxelData) -> Self {
+    pub fn from_voxel<V: ?Sized + VoxelQuery>(voxels: &V, vox: &VoxelData) -> Self {
         let mut key_low = vox.grid_coords;
         let mut key_high = key_low;
 
@@ -381,7 +384,12 @@ impl CanonicalVoxelShape {
         }
     }
 
-    pub fn cuboid(&self, voxels: &Voxels, vox: &VoxelData, domain2_1: Aabb) -> (Vector, Cuboid) {
+    pub fn cuboid<V: ?Sized + VoxelQuery>(
+        &self,
+        voxels: &V,
+        vox: &VoxelData,
+        domain2_1: Aabb,
+    ) -> (Vector, Cuboid) {
         let radius = voxels.voxel_size() / 2.0;
         let mut canonical_mins = voxels.voxel_center(self.range[0]);
         let mut canonical_maxs = voxels.voxel_center(self.range[1]);
