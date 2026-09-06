@@ -55,9 +55,10 @@ use alloc::{vec, vec::Vec};
 /// println!("Voxel type: {:?}", voxel_type);
 /// # }
 /// ```
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Default)]
 pub enum VoxelType {
     /// The voxel is empty.
+    #[default]
     Empty,
     /// The voxel is a vertex if all three coordinate axis directions have at
     /// least one empty neighbor.
