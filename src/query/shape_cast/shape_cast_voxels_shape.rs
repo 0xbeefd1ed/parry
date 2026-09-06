@@ -1,6 +1,6 @@
 use crate::math::{IVector, IVectorExt, Pose, Real, Vector, VectorExt};
 use crate::query::{QueryDispatcher, ShapeCastHit, ShapeCastOptions};
-use crate::shape::{Cuboid, Shape, VoxelQuery};
+use crate::shape::{Cuboid, QueriedVoxel, Shape, VoxelQuery, VoxelType};
 
 /// Time Of Impact of a voxels shape with any other shape, under a translational movement.
 ///
@@ -25,9 +25,9 @@ where
 
     let mut check_voxels_in_range = |search_domain: [IVector; 2]| {
         for vox in g1.voxels_in_range(search_domain[0], search_domain[1]) {
-            if !vox.state.is_empty() {
+            if vox.voxel_type() != VoxelType::Empty {
                 // PERF: could we check the canonical shape instead, and deduplicate accordingly?
-                let center = g1.voxel_center(vox.grid_coords);
+                let center = g1.voxel_center(vox.grid_coords());
                 let cuboid = Cuboid::new(g1.voxel_size() / 2.0);
                 let vox_pos12 = Pose::from_translation(center).inverse() * pos12;
                 if let Some(mut new_hit) = dispatcher

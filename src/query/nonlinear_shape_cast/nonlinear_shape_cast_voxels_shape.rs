@@ -1,7 +1,7 @@
 use crate::bounding_volume::BoundingVolume;
 use crate::math::{IVector, IVectorExt, Real, Vector, VectorExt};
 use crate::query::{NonlinearRigidMotion, QueryDispatcher, ShapeCastHit};
-use crate::shape::{Cuboid, Shape, VoxelQuery};
+use crate::shape::{Cuboid, QueriedVoxel, Shape, VoxelQuery, VoxelType};
 
 /// Time Of Impact of a voxels shape with any other shape, under a rigid motion (translation + rotation).
 ///
@@ -61,9 +61,9 @@ where
 
     let mut check_voxels_in_range = |search_domain: [IVector; 2]| {
         for vox in g1.voxels_in_range(search_domain[0], search_domain[1]) {
-            if !vox.state.is_empty() {
+            if vox.voxel_type() != VoxelType::Empty {
                 // PERF: could we check the canonical shape instead, and deduplicate accordingly?
-                let center = g1.voxel_center(vox.grid_coords);
+                let center = g1.voxel_center(vox.grid_coords());
                 let cuboid = Cuboid::new(g1.voxel_size() / 2.0);
                 let vox_motion1 = motion1.prepend_translation(center);
                 if let Some(new_hit) = dispatcher

@@ -1,7 +1,7 @@
-use crate::math::{ivect_to_vect, vect_to_ivect, IVector, Vector};
+use crate::math::{ivect_to_vect, vect_to_ivect, IVector, IVectorExt, Vector, DIM};
 
 use crate::bounding_volume::Aabb;
-use crate::shape::{VoxelData, VoxelState, Voxels};
+use crate::shape::{AxisMask, VoxelData, VoxelState, VoxelType, Voxels};
 
 /// Abstraction over the storage of a shape made of axis-aligned, uniformly sized voxels.
 ///
@@ -21,13 +21,21 @@ use crate::shape::{VoxelData, VoxelState, Voxels};
 /// `(key + 0.5) * voxel_size`. Grid ranges are always given as semi-open intervals
 /// `[mins, maxs)`: `mins` is included, `maxs` is excluded.
 ///
-/// # Neighborhood states
+/// # Voxel views and neighborhood states
 ///
-/// Each non-empty voxel must know which of its immediate axis-aligned neighbors are also
-/// non-empty, exposed as a [`VoxelState`]. This is what allows collision-detection to avoid
-/// hitting the "internal edges" between adjacent voxels. Implementors can either store this
-/// information (like [`Voxels`] does, one byte per voxel), or derive it on the fly from
-/// occupancy data using [`VoxelState::with_filled_neighbors`].
+/// Lookups and iterators don't yield a fixed data struct: they yield storage-defined voxel
+/// *views* ([`Self::Voxel`], bounded by [`QueriedVoxel`]). A view exposes cheap per-voxel
+/// data — grid coordinates, center, and the coarse [`QueriedVoxel::voxel_type`], which a
+/// sparse storage can pack in two bits per stored voxel (with empty voxels simply absent).
+///
+/// Contact-manifold computation additionally needs to know *which* of a voxel's immediate
+/// axis-aligned neighbors are filled — a [`VoxelState`] — to avoid hitting the "internal
+/// edges" between adjacent voxels. It obtains this from [`QueriedVoxel::voxel_state`], and
+/// only for the few voxels that are actual contact candidates, never during bulk iteration.
+/// Since views can borrow from their storage, they can compute the state on demand from
+/// local context (e.g. leaf-local reads in a sparse tree); [`Self::derive_voxel_state`]
+/// provides a fallback derivation based purely on occupancy, while storages like [`Voxels`]
+/// that persist the state (one byte per voxel) just hand out the stored value.
 ///
 /// # Note for implementors
 ///
@@ -36,93 +44,16 @@ use crate::shape::{VoxelData, VoxelState, Voxels};
 /// physics pipeline, wrap it in a type implementing [`Shape`](crate::shape::Shape) (typically
 /// with [`ShapeType::Custom`](crate::shape::ShapeType::Custom)) and dispatch to the generic
 /// voxel query functions from a custom `QueryDispatcher`.
-///
-/// # Example
-///
-/// Implementing `VoxelQuery` for a dense boolean grid, then running one of parry's generic
-/// algorithms on it:
-///
-/// ```
-/// # #[cfg(all(feature = "dim3", feature = "f32"))] {
-/// use parry3d::mass_properties::MassProperties;
-/// use parry3d::math::{IVector, Vector};
-/// use parry3d::shape::{AxisMask, VoxelData, VoxelQuery, VoxelState};
-///
-/// const N: i32 = 4;
-///
-/// /// A dense 4×4×4 grid of voxels, each of size 1×1×1.
-/// struct DenseGrid {
-///     cells: [[[bool; 4]; 4]; 4],
-/// }
-///
-/// impl DenseGrid {
-///     fn filled(&self, key: IVector) -> bool {
-///         key.cmpge(IVector::ZERO).all()
-///             && key.cmplt(IVector::splat(N)).all()
-///             && self.cells[key.x as usize][key.y as usize][key.z as usize]
-///     }
-/// }
-///
-/// impl VoxelQuery for DenseGrid {
-///     fn voxel_size(&self) -> Vector {
-///         Vector::splat(1.0)
-///     }
-///
-///     fn domain(&self) -> [IVector; 2] {
-///         [IVector::ZERO, IVector::splat(N)]
-///     }
-///
-///     fn voxel_state(&self, key: IVector) -> Option<VoxelState> {
-///         if !self.filled(key) {
-///             return Some(VoxelState::EMPTY);
-///         }
-///
-///         let mut mask = AxisMask::empty();
-///         if self.filled(key + IVector::new(1, 0, 0)) { mask |= AxisMask::X_POS; }
-///         if self.filled(key - IVector::new(1, 0, 0)) { mask |= AxisMask::X_NEG; }
-///         if self.filled(key + IVector::new(0, 1, 0)) { mask |= AxisMask::Y_POS; }
-///         if self.filled(key - IVector::new(0, 1, 0)) { mask |= AxisMask::Y_NEG; }
-///         if self.filled(key + IVector::new(0, 0, 1)) { mask |= AxisMask::Z_POS; }
-///         if self.filled(key - IVector::new(0, 0, 1)) { mask |= AxisMask::Z_NEG; }
-///         Some(VoxelState::with_filled_neighbors(mask))
-///     }
-///
-///     fn linear_id(&self, key: IVector) -> Option<u32> {
-///         self.filled(key)
-///             .then(|| (key.x * N * N + key.y * N + key.z) as u32)
-///     }
-///
-///     fn voxels_in_range(
-///         &self,
-///         mins: IVector,
-///         maxs: IVector,
-///     ) -> impl Iterator<Item = VoxelData> {
-///         let mins = mins.max(IVector::ZERO);
-///         let maxs = maxs.min(IVector::splat(N));
-///         (mins.x..maxs.x).flat_map(move |x| {
-///             (mins.y..maxs.y).flat_map(move |y| {
-///                 (mins.z..maxs.z).filter_map(move |z| {
-///                     let key = IVector::new(x, y, z);
-///                     let state = self.voxel_state(key)?;
-///                     (!state.is_empty()).then(|| VoxelData {
-///                         linear_id: self.linear_id(key).unwrap(),
-///                         grid_coords: key,
-///                         center: self.voxel_center(key),
-///                         state,
-///                     })
-///                 })
-///             })
-///         })
-///     }
-/// }
-///
-/// let mut grid = DenseGrid { cells: [[[true; 4]; 4]; 4] };
-/// // Any of parry's generic voxel algorithms now runs on `DenseGrid` directly:
-/// let props = MassProperties::from_voxels(1.0, &grid);
-/// assert_eq!(props.mass(), 64.0);
-/// # }
-/// ```
 pub trait VoxelQuery {
+    /// The view type this storage hands out for a single voxel.
+    ///
+    /// Views can borrow from the storage (e.g. hold a cursor into a sparse tree), letting
+    /// [`QueriedVoxel::voxel_state`] read neighborhood information from local context
+    /// instead of independent whole-storage lookups.
+    type Voxel<'a>: QueriedVoxel<'a>
+    where
+        Self: 'a;
+
     /// The size of each voxel along each local coordinate axis.
     fn voxel_size(&self) -> Vector;
 
@@ -132,11 +63,14 @@ pub trait VoxelQuery {
     /// range, but the range may also cover empty voxels.
     fn domain(&self) -> [IVector; 2];
 
-    /// The state of the voxel at the given grid coordinates.
+    /// The voxel at the given grid coordinates, or `None` if the storage holds nothing
+    /// there (empty voxel, or coordinates outside the tracked domain).
     ///
-    /// Both `None` and `Some(VoxelState::EMPTY)` designate an empty voxel; by convention,
-    /// `None` is returned when `key` falls outside of the storage's tracked domain.
-    fn voxel_state(&self, key: IVector) -> Option<VoxelState>;
+    /// Implementations should return `None` for empty voxels rather than a view whose
+    /// [`QueriedVoxel::voxel_type`] is [`VoxelType::Empty`]: the provided
+    /// [`Self::derive_voxel_state`] treats any `Some` as a filled voxel. Callers, on the
+    /// other hand, must treat `None` and empty-typed views the same.
+    fn voxel(&self, key: IVector) -> Option<Self::Voxel<'_>>;
 
     /// A stable identifier of the voxel at the given grid coordinates.
     ///
@@ -152,20 +86,24 @@ pub trait VoxelQuery {
     ///
     /// Implementations must yield every non-empty voxel with grid coordinates in
     /// `[mins, maxs)` exactly once. They may additionally yield empty voxels within that
-    /// range (callers filter on [`VoxelData::state`]), but must never yield a voxel outside
-    /// of the range.
-    fn voxels_in_range(&self, mins: IVector, maxs: IVector) -> impl Iterator<Item = VoxelData>;
+    /// range (callers filter on [`QueriedVoxel::voxel_type`]), but must never yield a
+    /// voxel outside of the range.
+    fn voxels_in_range(
+        &self,
+        mins: IVector,
+        maxs: IVector,
+    ) -> impl Iterator<Item = Self::Voxel<'_>>;
 
     /// Iterates through every voxel of this shape.
     ///
     /// This is equivalent to [`Self::voxels_in_range`] applied to the whole [`Self::domain`].
-    fn voxels(&self) -> impl Iterator<Item = VoxelData> {
+    fn voxels(&self) -> impl Iterator<Item = Self::Voxel<'_>> {
         let [mins, maxs] = self.domain();
         self.voxels_in_range(mins, maxs)
     }
 
     /// Iterates through every voxel intersecting the given local-space AABB.
-    fn voxels_intersecting_local_aabb(&self, aabb: &Aabb) -> impl Iterator<Item = VoxelData> {
+    fn voxels_intersecting_local_aabb(&self, aabb: &Aabb) -> impl Iterator<Item = Self::Voxel<'_>> {
         let [mins, maxs] = self.voxel_range_intersecting_local_aabb(aabb);
         self.voxels_in_range(mins, maxs)
     }
@@ -224,7 +162,66 @@ pub trait VoxelQuery {
     }
 }
 
+/// A single voxel handed out by a [`VoxelQuery`] storage.
+///
+/// This is the item type of the [`VoxelQuery`] lookups and iterators. Storages define their
+/// own implementor (see [`VoxelQuery::Voxel`]), which may borrow from the storage so that
+/// [`Self::voxel_state`] can be computed lazily from local context.
+///
+/// The coarse [`Self::voxel_type`] must be cheap: it is read during bulk iteration. The full
+/// [`Self::voxel_state`] is only requested for contact-candidate voxels; implementations
+/// must keep the two consistent (`self.voxel_state().voxel_type() == self.voxel_type()`).
+pub trait QueriedVoxel<'a> {
+    /// The type of this voxel: empty, or how it is exposed on the shape's surface.
+    fn voxel_type(&self) -> VoxelType;
+
+    /// The neighborhood state of this voxel, indicating which of its immediate
+    /// axis-aligned neighbors are filled.
+    ///
+    /// Storages that don't track neighborhood information can fall back to
+    /// [`VoxelQuery::derive_voxel_state`].
+    fn voxel_state(&self) -> VoxelState;
+
+    /// A stable, storage-defined identifier of this voxel.
+    ///
+    /// For the [`Voxels`] shape this is the flattened form of [`Voxels::linear_index`].
+    /// This identifier can be invalidated after the voxels shape is modified (e.g. by a call
+    /// to [`Voxels::set_voxel`], or [`Voxels::crop`]).
+    /// For stable references to voxels, always use [`Self::grid_coords`]. Only meaningful
+    /// for non-empty voxels.
+    fn linear_id(&self) -> u32;
+
+    /// The voxel's integer grid coordinates.
+    fn grid_coords(&self) -> IVector;
+
+    /// The voxel's center position in the local-space of the voxels shape it is part of.
+    fn center(&self) -> Vector;
+}
+
+impl QueriedVoxel<'_> for VoxelData {
+    fn voxel_type(&self) -> VoxelType {
+        self.state.voxel_type()
+    }
+
+    fn voxel_state(&self) -> VoxelState {
+        self.state
+    }
+
+    fn linear_id(&self) -> u32 {
+        self.linear_id
+    }
+
+    fn grid_coords(&self) -> IVector {
+        self.grid_coords
+    }
+
+    fn center(&self) -> Vector {
+        self.center
+    }
+}
 impl VoxelQuery for Voxels {
+    type Voxel<'a> = VoxelData;
+
     #[inline]
     fn voxel_size(&self) -> Vector {
         self.voxel_size()
@@ -236,8 +233,16 @@ impl VoxelQuery for Voxels {
     }
 
     #[inline]
-    fn voxel_state(&self, key: IVector) -> Option<VoxelState> {
-        self.voxel_state(key)
+    fn voxel(&self, key: IVector) -> Option<VoxelData> {
+        let id = self.linear_index(key)?;
+        let state = self.chunks[id.chunk_id].states[id.id_in_chunk];
+        // Tracked-but-empty voxels (allocated chunk, empty cell) read as `None` too.
+        (!state.is_empty()).then(|| VoxelData {
+            linear_id: id.flat_id() as u32,
+            grid_coords: key,
+            center: self.voxel_center(key),
+            state,
+        })
     }
 
     #[inline]

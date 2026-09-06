@@ -1,7 +1,7 @@
 use crate::math::{IVector, IVectorExt, Real, Vector, VectorExt};
 use crate::partitioning::BvhNode;
 use crate::query::{Ray, RayCast, RayIntersection};
-use crate::shape::{FeatureId, VoxelQuery, Voxels, VoxelsChunkRef};
+use crate::shape::{FeatureId, QueriedVoxel, VoxelQuery, VoxelType, Voxels, VoxelsChunkRef};
 
 /// Casts a ray on a voxel shape represented by any storage implementing [`VoxelQuery`].
 ///
@@ -48,17 +48,18 @@ pub fn cast_local_ray_on_voxels<V: ?Sized + VoxelQuery>(
     loop {
         let aabb = voxels.voxel_aabb(voxel_key);
 
-        if let Some(voxel) = voxels.voxel_state(voxel_key) {
-            if !voxel.is_empty() {
-                // We hit a voxel!
-                let hit = aabb.cast_local_ray_and_get_normal(ray, max_t, solid);
+        if voxels
+            .voxel(voxel_key)
+            .is_some_and(|vox| vox.voxel_type() != VoxelType::Empty)
+        {
+            // We hit a voxel!
+            let hit = aabb.cast_local_ray_and_get_normal(ray, max_t, solid);
 
-                if let Some(mut hit) = hit {
-                    hit.feature = voxels
-                        .linear_id(voxel_key)
-                        .map_or(FeatureId::Unknown, FeatureId::Face);
-                    return Some(hit);
-                }
+            if let Some(mut hit) = hit {
+                hit.feature = voxels
+                    .linear_id(voxel_key)
+                    .map_or(FeatureId::Unknown, FeatureId::Face);
+                return Some(hit);
             }
         }
 

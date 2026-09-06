@@ -2,7 +2,8 @@ use crate::bounding_volume::BoundingVolume;
 use crate::math::{Pose, Real, Vector, VectorExt};
 use crate::query::{ContactManifold, PointQuery, TrackedContact};
 use crate::shape::{
-    Ball, Cuboid, OctantPattern, PackedFeatureId, Shape, VoxelQuery, VoxelState, VoxelType,
+    Ball, Cuboid, OctantPattern, PackedFeatureId, QueriedVoxel, Shape, VoxelQuery, VoxelState,
+    VoxelType,
 };
 use alloc::vec::Vec;
 
@@ -58,7 +59,7 @@ pub fn contact_manifolds_voxels_ball<'a, ManifoldData, ContactData, V>(
     let aabb2 = ball2.aabb(pos12).loosened(prediction / 2.0);
     if let Some(aabb_intersection) = aabb1.intersection(&aabb2) {
         for vox1 in voxels1.voxels_intersecting_local_aabb(&aabb_intersection) {
-            match vox1.state.voxel_type() {
+            match vox1.voxel_type() {
                 #[cfg(feature = "dim2")]
                 VoxelType::Vertex | VoxelType::Face => { /* Ok */ }
                 #[cfg(feature = "dim3")]
@@ -68,9 +69,9 @@ pub fn contact_manifolds_voxels_ball<'a, ManifoldData, ContactData, V>(
 
             detect_hit_voxel_ball(
                 *pos12,
-                vox1.center,
+                vox1.center(),
                 radius1,
-                vox1.state,
+                vox1.voxel_state(),
                 center2,
                 radius2,
                 prediction,

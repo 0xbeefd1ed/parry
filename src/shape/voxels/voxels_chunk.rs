@@ -137,9 +137,7 @@ impl VoxelsChunk {
 ///
 /// // Query voxels within this chunk
 /// for voxel in chunk_ref.voxels() {
-///     if !voxel.state.is_empty() {
-///         println!("Voxel at {:?}", voxel.grid_coords);
-///     }
+///     println!("Voxel at {:?}", voxel.grid_coords);
 /// }
 ///
 /// // Get chunk's AABB

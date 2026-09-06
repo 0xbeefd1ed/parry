@@ -1,7 +1,9 @@
 use crate::bounding_volume::{Aabb, BoundingVolume};
 use crate::math::{Real, Vector};
 use crate::query::{PointProjection, PointQuery};
-use crate::shape::{Cuboid, FeatureId, VoxelQuery, Voxels, VoxelsChunkRef};
+use crate::shape::{
+    Cuboid, FeatureId, QueriedVoxel, VoxelQuery, VoxelType, Voxels, VoxelsChunkRef,
+};
 
 /// Projects a point on a voxel shape represented by any storage implementing [`VoxelQuery`].
 ///
@@ -28,8 +30,8 @@ pub fn project_local_point_on_voxels<V: ?Sized + VoxelQuery>(
     let key_at_pt = voxels.voxel_at_point(pt);
     if solid
         && voxels
-            .voxel_state(key_at_pt)
-            .is_some_and(|state| !state.is_empty())
+            .voxel(key_at_pt)
+            .is_some_and(|vox| vox.voxel_type() != VoxelType::Empty)
     {
         return Some((
             PointProjection::new(true, pt),
@@ -49,16 +51,16 @@ pub fn project_local_point_on_voxels<V: ?Sized + VoxelQuery>(
         let mut best_dist = Real::MAX;
 
         for vox in voxels.voxels_intersecting_local_aabb(&search_aabb) {
-            if vox.state.is_empty() {
+            if vox.voxel_type() == VoxelType::Empty {
                 continue;
             }
 
-            let mut candidate = base_cuboid.project_local_point(pt - vox.center, solid);
-            candidate.point += vox.center;
+            let mut candidate = base_cuboid.project_local_point(pt - vox.center(), solid);
+            candidate.point += vox.center();
 
             let candidate_dist = (candidate.point - pt).length();
             if candidate_dist < best_dist {
-                best = Some((candidate, vox.linear_id));
+                best = Some((candidate, vox.linear_id()));
                 best_dist = candidate_dist;
             }
         }
@@ -132,8 +134,8 @@ impl<'a> VoxelsChunkRef<'a> {
         let mut result_vox_id = 0;
 
         for vox in self.voxels() {
-            let mut candidate = base_cuboid.project_local_point(pt - vox.center, solid);
-            candidate.point += vox.center;
+            let mut candidate = base_cuboid.project_local_point(pt - vox.center(), solid);
+            candidate.point += vox.center();
 
             let candidate_dist = (candidate.point - pt).length();
             if candidate_dist < smallest_dist {

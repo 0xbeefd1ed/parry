@@ -4,7 +4,7 @@ use crate::query::{
     ContactManifold, ContactManifoldsWorkspace, PersistentQueryDispatcher, PointQuery,
     TypedWorkspaceData, WorkspaceData,
 };
-use crate::shape::{AxisMask, Cuboid, Shape, SupportMap, VoxelData, VoxelQuery, VoxelType};
+use crate::shape::{AxisMask, Cuboid, QueriedVoxel, Shape, SupportMap, VoxelQuery, VoxelType};
 use crate::utils::hashmap::{Entry, HashMap};
 use crate::utils::PoseOpt;
 use alloc::{boxed::Box, vec::Vec};
@@ -151,7 +151,7 @@ pub fn contact_manifolds_voxels_shape<ManifoldData, ContactData, V>(
 
     if let Some(intersection_aabb1) = aabb1.intersection(&aabb2_1) {
         for vox1 in voxels1.voxels_intersecting_local_aabb(&intersection_aabb1) {
-            let vox_type1 = vox1.state.voxel_type();
+            let vox_type1 = vox1.voxel_type();
 
             // TODO: would be nice to have a strategy to handle interior voxels for depenetration.
             if vox_type1 == VoxelType::Empty || vox_type1 == VoxelType::Interior {
@@ -188,7 +188,7 @@ pub fn contact_manifolds_voxels_shape<ManifoldData, ContactData, V>(
                             timestamp: new_timestamp,
                         };
 
-                        let vid = vox1.linear_id;
+                        let vid = vox1.linear_id();
                         let (id1, id2) = if flipped { (0, vid) } else { (vid, 0) };
                         manifolds.push(ContactManifold::with_data(
                             id1,
@@ -285,7 +285,7 @@ pub fn contact_manifolds_voxels_shape<ManifoldData, ContactData, V>(
                     // interior of the infinitely expanded canonical shape by checking if
                     // the opposite normal had led to a better vector.
                     let cuboid1 = Cuboid::new(radius1);
-                    let sp1 = cuboid1.local_support_point(-penetration_dir1) + vox1.center;
+                    let sp1 = cuboid1.local_support_point(-penetration_dir1) + vox1.center();
                     let sm2 = shape2
                         .as_support_map()
                         .expect("Unsupported collision pair.");
@@ -301,9 +301,9 @@ pub fn contact_manifolds_voxels_shape<ManifoldData, ContactData, V>(
                 }
 
                 let pt_in_voxel_space = if flipped {
-                    manifold.subshape_pos2().transform_point(pt.local_p2) - vox1.center
+                    manifold.subshape_pos2().transform_point(pt.local_p2) - vox1.center()
                 } else {
-                    manifold.subshape_pos1().transform_point(pt.local_p1) - vox1.center
+                    manifold.subshape_pos1().transform_point(pt.local_p1) - vox1.center()
                 };
                 sub_detector.selected_contacts |=
                     (test_voxel.contains_local_point(pt_in_voxel_space) as u32) << i;
@@ -337,8 +337,11 @@ pub(crate) struct CanonicalVoxelShape {
 }
 
 impl CanonicalVoxelShape {
-    pub fn from_voxel<V: ?Sized + VoxelQuery>(voxels: &V, vox: &VoxelData) -> Self {
-        let mut key_low = vox.grid_coords;
+    pub fn from_voxel<'a, 'b, V: ?Sized + VoxelQuery>(
+        voxels: &V,
+        vox: &'a impl QueriedVoxel<'b>,
+    ) -> Self {
+        let mut key_low = vox.grid_coords();
         let mut key_high = key_low;
 
         // NOTE: the mins/maxs here are offset by 1 so we can expand past the last voxel if it
@@ -347,7 +350,7 @@ impl CanonicalVoxelShape {
         let mins = voxels.domain()[0] - IVector::splat(1);
         let maxs = voxels.domain()[1];
         let counts = maxs - mins;
-        let mask1 = vox.state.free_faces();
+        let mask1 = vox.voxel_state().free_faces();
 
         let adjust_canon = |axis: AxisMask, i: usize, key: &mut IVector, val: Int| {
             if !mask1.contains(axis) {
@@ -384,10 +387,10 @@ impl CanonicalVoxelShape {
         }
     }
 
-    pub fn cuboid<V: ?Sized + VoxelQuery>(
+    pub fn cuboid<'a, 'b, V: ?Sized + VoxelQuery>(
         &self,
         voxels: &V,
-        vox: &VoxelData,
+        vox: &'a impl QueriedVoxel<'b>,
         domain2_1: Aabb,
     ) -> (Vector, Cuboid) {
         let radius = voxels.voxel_size() / 2.0;
@@ -395,11 +398,11 @@ impl CanonicalVoxelShape {
         let mut canonical_maxs = voxels.voxel_center(self.range[1]);
 
         for k in 0..DIM {
-            if self.range[0].ivget(k) != vox.grid_coords.ivget(k) {
+            if self.range[0].ivget(k) != vox.grid_coords().ivget(k) {
                 canonical_mins.vset(k, canonical_mins.vget(k).max(domain2_1.mins.vget(k)));
             }
 
-            if self.range[1].ivget(k) != vox.grid_coords.ivget(k) {
+            if self.range[1].ivget(k) != vox.grid_coords().ivget(k) {
                 canonical_maxs.vset(k, canonical_maxs.vget(k).min(domain2_1.maxs.vget(k)));
             }
         }

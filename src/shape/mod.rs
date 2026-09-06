@@ -23,8 +23,8 @@ pub use self::{
     polyline::Polyline,
     shared_shape::SharedShape,
     voxels::{
-        AxisMask, OctantPattern, VoxelData, VoxelQuery, VoxelState, VoxelType, Voxels,
-        VoxelsChunkRef,
+        AxisMask, OctantPattern, QueriedVoxel, VoxelData, VoxelQuery, VoxelState, VoxelType,
+        Voxels, VoxelsChunkRef,
     },
 };
 

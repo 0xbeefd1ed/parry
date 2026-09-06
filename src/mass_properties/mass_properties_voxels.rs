@@ -2,7 +2,7 @@ use crate::mass_properties::MassProperties;
 #[cfg(feature = "dim3")]
 use crate::math::Matrix;
 use crate::math::{Real, Vector};
-use crate::shape::VoxelQuery;
+use crate::shape::{QueriedVoxel, VoxelQuery, VoxelType};
 
 impl MassProperties {
     /// Computes the mass properties of a voxel grid.
@@ -164,7 +164,9 @@ impl MassProperties {
     ///
     /// - Only non-empty voxels contribute to mass
     /// - Empty voxels are ignored (zero mass, no inertia)
-    /// - The voxel state is checked using `vox.state.is_empty()`
+    /// - A voxel is considered empty if its
+    ///   [`QueriedVoxel::voxel_type`](crate::shape::QueriedVoxel::voxel_type) is
+    ///   [`VoxelType::Empty`]
     ///
     /// # See Also
     ///
@@ -182,8 +184,8 @@ impl MassProperties {
         let block_ref_mprops = MassProperties::from_cuboid(density, voxels.voxel_size() / 2.0);
 
         for vox in voxels.voxels() {
-            if !vox.state.is_empty() {
-                com += vox.center;
+            if vox.voxel_type() != VoxelType::Empty {
+                com += vox.center();
                 num_not_empty += 1;
             }
         }
@@ -191,9 +193,9 @@ impl MassProperties {
         com /= num_not_empty as Real;
 
         for vox in voxels.voxels() {
-            if !vox.state.is_empty() {
+            if vox.voxel_type() != VoxelType::Empty {
                 angular_inertia +=
-                    block_ref_mprops.construct_shifted_inertia_matrix(vox.center - com);
+                    block_ref_mprops.construct_shifted_inertia_matrix(vox.center() - com);
             }
         }
 

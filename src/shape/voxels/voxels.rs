@@ -219,6 +219,12 @@ impl OctantPattern {
 #[cfg_attr(feature = "serde-serialize", derive(Serialize, Deserialize))]
 pub struct VoxelState(pub(super) u8);
 
+impl Default for VoxelState {
+    fn default() -> Self {
+        Self::EMPTY
+    }
+}
+
 impl VoxelState {
     /// The value of empty voxels.
     pub const EMPTY: VoxelState = VoxelState(EMPTY_FACE_MASK);
@@ -297,7 +303,9 @@ impl VoxelState {
 /// Information associated to a voxel.
 ///
 /// This structure provides complete information about a single voxel including its position
-/// in both grid coordinates and world space, as well as its state (empty/filled and neighborhood).
+/// in both grid coordinates and world space, as well as its state (empty/filled and
+/// neighborhood). It is the view type ([`VoxelQuery::Voxel`](crate::shape::VoxelQuery::Voxel))
+/// handed out by the [`Voxels`] shape.
 ///
 /// # Note
 ///
@@ -319,11 +327,9 @@ impl VoxelState {
 ///
 /// // Iterate through all voxels
 /// for voxel in voxels.voxels() {
-///     if !voxel.state.is_empty() {
-///         println!("Voxel at grid position {:?}", voxel.grid_coords);
-///         println!("  World center: {:?}", voxel.center);
-///         println!("  Type: {:?}", voxel.state.voxel_type());
-///     }
+///     println!("Voxel at grid position {:?}", voxel.grid_coords);
+///     println!("  World center: {:?}", voxel.center);
+///     println!("  Type: {:?}", voxel.state.voxel_type());
 /// }
 /// # }
 /// ```
@@ -468,10 +474,8 @@ pub struct VoxelData {
 ///
 /// // Iterate through all non-empty voxels
 /// for voxel in voxels.voxels() {
-///     if !voxel.state.is_empty() {
-///         println!("Voxel at grid {:?}, world center {:?}",
-///                  voxel.grid_coords, voxel.center);
-///     }
+///     println!("Voxel at grid {:?}, world center {:?}",
+///              voxel.grid_coords, voxel.center);
 /// }
 /// # }
 /// ```
@@ -515,9 +519,7 @@ pub struct VoxelData {
 ///
 /// // Find voxels intersecting an AABB
 /// let query_aabb = Aabb::new(Vector::new(-0.5, -0.5, -0.5), Vector::new(1.5, 1.5, 1.5));
-/// let count = voxels.voxels_intersecting_local_aabb(&query_aabb)
-///     .filter(|v| !v.state.is_empty())
-///     .count();
+/// let count = voxels.voxels_intersecting_local_aabb(&query_aabb).count();
 /// println!("Found {} voxels in AABB", count);
 ///
 /// // Get the overall domain bounds
@@ -684,9 +686,7 @@ impl Voxels {
     /// let voxels = Voxels::from_points(Vector::new(1.0, 1.0, 1.0), &points);
     ///
     /// // Only 3 unique voxels created (first two points merged)
-    /// let filled_count = voxels.voxels()
-    ///     .filter(|v| !v.state.is_empty())
-    ///     .count();
+    /// let filled_count = voxels.voxels().count();
     /// assert_eq!(filled_count, 3);
     /// # }
     /// ```
@@ -752,9 +752,7 @@ impl Voxels {
     ///
     /// // Iterate through filled voxels (more efficient than iterating domain)
     /// for voxel in voxels.voxels() {
-    ///     if !voxel.state.is_empty() {
-    ///         println!("Filled voxel at {:?}", voxel.grid_coords);
-    ///     }
+    ///     println!("Filled voxel at {:?}", voxel.grid_coords);
     /// }
     /// # }
     /// ```
@@ -935,8 +933,6 @@ impl Voxels {
     }
 
     /// Iterates through every voxel intersecting the given aabb.
-    ///
-    /// Returns the voxel’s linearized id, center, and state.
     pub fn voxels_intersecting_local_aabb(
         &self,
         aabb: &Aabb,
@@ -957,7 +953,8 @@ impl Voxels {
         )
     }
 
-    /// Iterate through the data of all the voxels within the given (semi-open) voxel grid indices.
+    /// Iterate through the data of all the non-empty voxels within the given (semi-open)
+    /// voxel grid indices.
     ///
     /// Note that this only yields non-empty voxels within the range. This does not
     /// include any voxel that falls outside [`Self::domain`].
