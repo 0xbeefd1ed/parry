@@ -17,10 +17,10 @@ impl MassProperties {
     /// * `density` - The material density
     ///   - In 3D: kg/m³ (mass per unit volume)
     ///   - In 2D: kg/m² (mass per unit area)
-    /// * `voxels` - A [`Voxels`] shape containing the voxel grid
+    /// * `voxels` - A `Voxels` structure containing the voxel grid
     ///   - Each voxel is a small cube/square of uniform size
     ///   - Voxels can be empty or filled
-    ///   - Since v0.25.0, `Voxels` uses sparse storage internally for efficiency
+    ///   - Since v0.25.0, uses sparse storage internally for efficiency
     ///
     /// # Returns
     ///
