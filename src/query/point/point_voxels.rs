@@ -1,7 +1,6 @@
-use crate::bounding_volume::BoundingVolume;
 use crate::math::{Real, Vector};
 use crate::query::{PointProjection, PointQuery};
-use crate::shape::{Cuboid, FeatureId, QueriedVoxel, VoxelQuery, Voxels, VoxelsChunkRef};
+use crate::shape::{Cuboid, FeatureId, QueriedVoxel, Voxels, VoxelsChunkRef};
 
 impl PointQuery for Voxels {
     #[inline]

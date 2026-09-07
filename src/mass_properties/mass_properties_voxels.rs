@@ -2,7 +2,7 @@ use crate::mass_properties::MassProperties;
 #[cfg(feature = "dim3")]
 use crate::math::Matrix;
 use crate::math::{Real, Vector};
-use crate::shape::{QueriedVoxel, VoxelQuery, VoxelType, Voxels};
+use crate::shape::{QueriedVoxel, VoxelType, Voxels};
 
 impl MassProperties {
     /// Computes the mass properties of a voxel grid.
@@ -17,8 +17,7 @@ impl MassProperties {
     /// * `density` - The material density
     ///   - In 3D: kg/m³ (mass per unit volume)
     ///   - In 2D: kg/m² (mass per unit area)
-    /// * `voxels` - Any voxel storage implementing [`VoxelQuery`], e.g. the
-    ///   [`Voxels`] shape
+    /// * `voxels` - A [`Voxels`] shape containing the voxel grid
     ///   - Each voxel is a small cube/square of uniform size
     ///   - Voxels can be empty or filled
     ///   - Since v0.25.0, `Voxels` uses sparse storage internally for efficiency

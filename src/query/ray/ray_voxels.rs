@@ -1,7 +1,7 @@
 use crate::math::{IVectorExt, Real, Vector, VectorExt};
 use crate::partitioning::BvhNode;
 use crate::query::{Ray, RayCast, RayIntersection};
-use crate::shape::{FeatureId, QueriedVoxel, VoxelQuery, Voxels, VoxelsChunkRef};
+use crate::shape::{FeatureId, Voxels, VoxelsChunkRef};
 
 impl RayCast for Voxels {
     #[inline]

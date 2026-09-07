@@ -7,9 +7,8 @@
   `contact_manifolds_voxels_composite_shape`, `contact_manifolds_voxels_voxels`,
   `intersection_test_voxels_shape`, `intersection_test_shape_voxels`, `cast_shapes_voxels_shape`,
   `cast_shapes_shape_voxels`, `cast_shapes_nonlinear_voxels_shape`,
-  `cast_shapes_nonlinear_shape_voxels`, and `MassProperties::from_voxels`. Calls that pass a
-  `&Voxels` keep working unchanged; callers naming the functions with explicit turbofish generics
-  gain one extra type parameter.
+  `cast_shapes_nonlinear_shape_voxels`. Calls that pass a `&Voxels` keep working unchanged;
+  callers naming the functions with explicit turbofish generics gain one extra type parameter.
 - Reading a voxel's type, state, center, or grid coordinates from the item yielded by
   `Voxels::voxels`, `Voxels::voxels_in_range`, and `Voxels::voxels_intersecting_local_aabb` should
   go through the new `QueriedVoxel` trait methods (`voxel_type()`, `voxel_state()`, `center()`,
@@ -25,8 +24,7 @@
 - `VoxelQuery` trait, an abstraction over the storage of a shape made of axis-aligned, uniformly
   sized voxels. Implementing it for a custom sparse structure (chunked grid, octree, VDB-like tree)
   lets Parry's voxel collision algorithms (contact manifolds, intersection tests, linear and
-  nonlinear shape-casting, mass properties) run directly on that structure without copying it into a
-  `Voxels` shape. Implementors provide `voxel_size`, `domain`, and `voxels_in_range`; grid helpers
+  nonlinear shape-casting) run directly on that structure without copying it into a `Voxels` shape. Implementors provide `voxel_size`, `domain`, and `voxels_in_range`; grid helpers
   such as `voxel_at_point`, `voxel_center`, `voxel_aabb`, `voxel_range_intersecting_local_aabb`,
   `align_aabb_to_grid`, and `local_aabb` have default implementations.
 - `QueriedVoxel` trait describing the per-voxel view handed out by a `VoxelQuery` storage. Views

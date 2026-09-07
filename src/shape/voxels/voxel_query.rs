@@ -1,4 +1,4 @@
-use crate::math::{ivect_to_vect, vect_to_ivect, IVector, IVectorExt, Vector};
+use crate::math::{ivect_to_vect, vect_to_ivect, IVector, Vector};
 
 use crate::bounding_volume::Aabb;
 use crate::shape::{VoxelData, VoxelState, VoxelType, Voxels};
@@ -6,7 +6,7 @@ use crate::shape::{VoxelData, VoxelState, VoxelType, Voxels};
 /// Abstraction over the storage of a shape made of axis-aligned, uniformly sized voxels.
 ///
 /// Parry's voxel collision-detection algorithms (contact manifolds, intersection tests,
-/// linear and nonlinear shape-casting, ray-casting, point projection, mass properties) are
+/// linear and nonlinear shape-casting) are
 /// written against this trait rather than against the concrete [`Voxels`] shape. Implementing
 /// it for a custom sparse data-structure (chunked grid, octree, VDB-like tree, etc.) lets these
 /// algorithms run directly on that structure without copying it into a [`Voxels`] shape,
