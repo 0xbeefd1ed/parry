@@ -33,9 +33,9 @@ use crate::shape::{VoxelData, VoxelState, VoxelType, Voxels};
 /// edges" between adjacent voxels. It obtains this from [`QueriedVoxel::voxel_state`], and
 /// only for the few voxels that are actual contact candidates, never during bulk iteration.
 /// Since views can borrow from their storage, they can compute the state on demand from
-/// local context (e.g. leaf-local reads in a sparse tree); [`Self::derive_voxel_state`]
-/// provides a fallback derivation based purely on occupancy, while storages like [`Voxels`]
-/// that persist the state (one byte per voxel) just hand out the stored value.
+/// local context (e.g. leaf-local reads in a sparse tree);
+/// [`VoxelState::with_filled_neighbors`] builds the state from occupancy alone, while storages
+/// like [`Voxels`] that persist the state (one byte per voxel) just hand out the stored value.
 ///
 /// # Note for implementors
 ///
@@ -158,9 +158,6 @@ pub trait QueriedVoxel<'a> {
 
     /// The neighborhood state of this voxel, indicating which of its immediate
     /// axis-aligned neighbors are filled.
-    ///
-    /// Storages that don't track neighborhood information can fall back to
-    /// [`VoxelQuery::derive_voxel_state`].
     fn voxel_state(&self) -> VoxelState;
 
     /// A stable, storage-defined identifier of this voxel.

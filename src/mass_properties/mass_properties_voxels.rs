@@ -18,7 +18,7 @@ impl MassProperties {
     ///   - In 3D: kg/m³ (mass per unit volume)
     ///   - In 2D: kg/m² (mass per unit area)
     /// * `voxels` - Any voxel storage implementing [`VoxelQuery`], e.g. the
-    ///   [`Voxels`](crate::shape::Voxels) shape
+    ///   [`Voxels`] shape
     ///   - Each voxel is a small cube/square of uniform size
     ///   - Voxels can be empty or filled
     ///   - Since v0.25.0, `Voxels` uses sparse storage internally for efficiency
@@ -165,7 +165,7 @@ impl MassProperties {
     /// - Only non-empty voxels contribute to mass
     /// - Empty voxels are ignored (zero mass, no inertia)
     /// - A voxel is considered empty if its
-    ///   [`QueriedVoxel::voxel_type`](crate::shape::QueriedVoxel::voxel_type) is
+    ///   [`QueriedVoxel::voxel_type`] is
     ///   [`VoxelType::Empty`]
     ///
     /// # See Also
