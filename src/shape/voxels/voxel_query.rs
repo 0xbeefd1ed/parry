@@ -1,7 +1,7 @@
-use crate::math::{ivect_to_vect, vect_to_ivect, IVector, IVectorExt, Vector, DIM};
+use crate::math::{ivect_to_vect, vect_to_ivect, IVector, IVectorExt, Vector};
 
 use crate::bounding_volume::Aabb;
-use crate::shape::{AxisMask, VoxelData, VoxelState, VoxelType, Voxels};
+use crate::shape::{VoxelData, VoxelState, VoxelType, Voxels};
 
 /// Abstraction over the storage of a shape made of axis-aligned, uniformly sized voxels.
 ///

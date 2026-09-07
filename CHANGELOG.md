@@ -2,9 +2,6 @@
 
 ### Breaking changes
 
-- `VoxelData::linear_id` is now a flat `u32` (the flattened form of `Voxels::linear_index`) instead of
-  a `VoxelIndex`. Code that destructured `linear_id` into `chunk_id`/`id_in_chunk` must go through
-  `Voxels::linear_index` instead.
 - The voxel query functions are now generic over the voxel storage instead of taking `&Voxels`:
   `contact_manifolds_voxels_shape`, `contact_manifolds_voxels_ball`,
   `contact_manifolds_voxels_composite_shape`, `contact_manifolds_voxels_voxels`,
@@ -42,11 +39,6 @@
 - `Default` implementations for `VoxelType` (`Empty`) and `VoxelState` (`EMPTY`).
 - `contact_manifolds_voxels_ball` is now re-exported from `parry::query`, alongside the other
   voxel contact-manifold functions.
-
-### Modified
-
-- `Voxels::voxels_in_range` documentation now states that only non-empty voxels are yielded, and
-  the `Voxels` examples no longer filter out empty voxels redundantly.
 
 ## 0.30.2
 
