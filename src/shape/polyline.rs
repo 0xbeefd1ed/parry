@@ -4,14 +4,14 @@ use crate::partitioning::{Bvh, BvhBuildStrategy};
 use crate::query::{PointProjection, PointQueryWithLocation};
 use crate::shape::composite_shape::CompositeShape;
 use crate::shape::{
-    FeatureId, Segment, SegmentPointLocation, SegmentPseudoNormals, Shape, TypedCompositeShape,
+    FeatureId, Segment, SegmentPointLocation, SegmentPseudoNormals, Shape, SubShapeId,
+    TypedCompositeShape,
 };
 #[cfg(feature = "alloc")]
 use alloc::vec::Vec;
 
 use crate::query::details::NormalConstraints;
 
-#[cfg(feature = "dim2")]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(
     feature = "rkyv",
@@ -22,7 +22,6 @@ use crate::query::details::NormalConstraints;
 /// Controls how a [`Polyline`] is loaded.
 pub struct PolylineFlags(u8);
 
-#[cfg(feature = "dim2")]
 bitflags::bitflags! {
     impl PolylineFlags: u8 {
         /// If set, the polyline is treated as one-sided: a pseudo-normal is computed at every
@@ -32,7 +31,14 @@ bitflags::bitflags! {
         /// a double-sided polyline. This one flag covers what `TriMesh` splits across
         /// `TriMeshFlags::ORIENTED` (compute pseudo-normals) and `TriMeshFlags::FIX_INTERNAL_EDGES`
         /// (use them to clamp contacts).
+        #[cfg(feature = "dim2")]
         const ORIENTED = 1;
+        /// If set, the vertices of this polyline are expected to move between queries while its
+        /// pose stays fixed (see [`Polyline::set_vertices`]).
+        ///
+        /// The contact-manifold queries then never reuse cached contact points (see
+        /// [`CompositeShape::is_deformable`]).
+        const DEFORMABLE = 1 << 1;
     }
 }
 
@@ -129,7 +135,6 @@ pub struct Polyline {
     /// normals are then clamped to one side so the polyline acts as a one-sided surface.
     #[cfg(feature = "dim2")]
     pseudo_normals: Option<Vec<Vector>>,
-    #[cfg(feature = "dim2")]
     flags: PolylineFlags,
 }
 
@@ -217,13 +222,12 @@ impl Polyline {
             indices,
             #[cfg(feature = "dim2")]
             pseudo_normals: None,
-            #[cfg(feature = "dim2")]
             flags: PolylineFlags::empty(),
         }
     }
 
     /// Creates a new polyline with the given [`PolylineFlags`] controlling its optional associated
-    /// data, e.g. orientation via [`PolylineFlags::ORIENTED`].
+    /// data, e.g. orientation via `PolylineFlags::ORIENTED` (2D only).
     ///
     /// # Example
     ///
@@ -247,7 +251,6 @@ impl Polyline {
     /// assert!(bottom.face.abs_diff_eq(Vector::new(0.0, -1.0), 1.0e-5));
     /// # }
     /// ```
-    #[cfg(feature = "dim2")]
     pub fn with_flags(
         vertices: Vec<Vector>,
         indices: Option<Vec<[u32; 2]>>,
@@ -259,10 +262,10 @@ impl Polyline {
     }
 
     /// Sets the [`PolylineFlags`], computing or discarding the polyline's optional associated data.
-    #[cfg(feature = "dim2")]
     pub fn set_flags(&mut self, flags: PolylineFlags) {
         self.flags = flags;
 
+        #[cfg(feature = "dim2")]
         if flags.contains(PolylineFlags::ORIENTED) {
             self.compute_pseudo_normals();
         } else {
@@ -271,9 +274,63 @@ impl Polyline {
     }
 
     /// The [`PolylineFlags`] controlling this polyline's optional associated data.
-    #[cfg(feature = "dim2")]
     pub fn flags(&self) -> PolylineFlags {
         self.flags
+    }
+
+    /// Replaces the vertex positions in place, keeping the index buffer.
+    ///
+    /// The BVH is refitted (not rebuilt) and the pseudo-normals, if any, are recomputed. This
+    /// is the update path of a deformable polyline: `vertices.len()` must equal
+    /// [`Self::vertices`]`.len()`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `vertices.len()` differs from the current number of vertices.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # #[cfg(all(feature = "dim2", feature = "f32"))] {
+    /// use parry2d::shape::{Polyline, PolylineFlags};
+    /// use parry2d::math::Vector;
+    ///
+    /// let vertices = vec![Vector::ZERO, Vector::new(1.0, 0.0), Vector::new(2.0, 0.0)];
+    /// let mut polyline = Polyline::with_flags(vertices, None, PolylineFlags::DEFORMABLE);
+    ///
+    /// // Lift the middle vertex.
+    /// polyline.set_vertices(&[Vector::ZERO, Vector::new(1.0, 1.0), Vector::new(2.0, 0.0)]);
+    /// assert_eq!(polyline.local_aabb().maxs, Vector::new(2.0, 1.0));
+    /// # }
+    /// ```
+    pub fn set_vertices(&mut self, vertices: &[Vector]) {
+        assert_eq!(
+            vertices.len(),
+            self.vertices.len(),
+            "Polyline::set_vertices: the number of vertices must not change."
+        );
+        self.update_vertices(|vtx| vtx.copy_from_slice(vertices));
+    }
+
+    /// Modifies the vertex positions in place through `f`, then refits the BVH and recomputes
+    /// the pseudo-normals, if any (see [`Self::set_vertices`]).
+    pub fn update_vertices(&mut self, f: impl FnOnce(&mut [Vector])) {
+        f(&mut self.vertices);
+
+        for (i, idx) in self.indices.iter().enumerate() {
+            let aabb = Segment::new(
+                self.vertices[idx[0] as usize],
+                self.vertices[idx[1] as usize],
+            )
+            .local_aabb();
+            let _ = self.bvh.insert_or_update_partially(aabb, i as u32, 0.0);
+        }
+        self.bvh.refit_without_opt();
+
+        #[cfg(feature = "dim2")]
+        if self.pseudo_normals.is_some() {
+            self.compute_pseudo_normals();
+        }
     }
 
     /// Computes the outward pseudo-normal at every vertex (the normalized sum of its incident
@@ -299,6 +356,15 @@ impl Polyline {
         }
 
         self.pseudo_normals = Some(vertex_normals);
+    }
+
+    /// The outward pseudo-normal of every vertex, if they have been computed (i.e. if this
+    /// polyline was built with [`PolylineFlags::ORIENTED`]).
+    ///
+    /// The returned slice is indexed by vertex index, like [`Self::vertices`].
+    #[cfg(feature = "dim2")]
+    pub fn pseudo_normals(&self) -> Option<&[Vector]> {
+        self.pseudo_normals.as_deref()
     }
 
     /// Returns the [`SegmentPseudoNormals`] for the segment with index `i`, or `None` unless this
@@ -570,17 +636,26 @@ impl Polyline {
         )
     }
 
-    /// Transforms  the feature-id of a segment to the feature-id of this polyline.
+    /// Converts a FeatureId of the segment `segment` into a FeatureId of the whole polyline.
+    ///
+    /// An endpoint becomes the polyline vertex it indexes, so the two segments meeting at a corner
+    /// agree on it. In 2D a segment has a side facing each way, and they are numbered like the
+    /// segments themselves: the second side of segment `i` is `i + self.indices().len()`.
     pub fn segment_feature_to_polyline_feature(
         &self,
-        segment: u32,
-        _feature: FeatureId,
+        segment: SubShapeId,
+        feature: FeatureId,
     ) -> FeatureId {
-        // TODO: return a vertex feature when it makes sense.
-        #[cfg(feature = "dim2")]
-        return FeatureId::Face(segment);
-        #[cfg(feature = "dim3")]
-        return FeatureId::Edge(segment);
+        match feature {
+            FeatureId::Vertex(endpoint) => {
+                FeatureId::Vertex(self.indices[segment as usize][endpoint as usize])
+            }
+            #[cfg(feature = "dim2")]
+            FeatureId::Face(side) => FeatureId::Face(segment + side * self.indices.len() as u32),
+            #[cfg(feature = "dim3")]
+            FeatureId::Edge(_) => FeatureId::Edge(segment),
+            _ => FeatureId::Unknown,
+        }
     }
 
     /// Returns a slice containing all vertices of this polyline.
@@ -754,6 +829,7 @@ impl Polyline {
                 bvh,
                 vertices: self.vertices,
                 indices: self.indices,
+                flags: self.flags,
             }
         }
     }
@@ -976,6 +1052,10 @@ impl CompositeShape for Polyline {
 
     fn bvh(&self) -> &Bvh {
         &self.bvh
+    }
+
+    fn is_deformable(&self) -> bool {
+        self.flags.contains(PolylineFlags::DEFORMABLE)
     }
 }
 

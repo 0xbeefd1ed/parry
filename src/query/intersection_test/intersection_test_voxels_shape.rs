@@ -1,5 +1,5 @@
 use crate::math::Pose;
-use crate::query::PersistentQueryDispatcher;
+use crate::query::{PersistentQueryDispatcher, ShapeIntersection};
 use crate::shape::{Cuboid, QueriedVoxel, Shape, VoxelQuery, VoxelType};
 
 /// Checks for any intersection between voxels and an arbitrary shape, both represented as a `Shape` trait-object.
@@ -8,13 +8,13 @@ pub fn intersection_test_voxels_shape_shapes(
     pos12: &Pose,
     shape1: &dyn Shape,
     shape2: &dyn Shape,
-) -> bool {
+) -> ShapeIntersection {
     if let Some(voxels1) = shape1.as_voxels() {
         intersection_test_voxels_shape(dispatcher, pos12, voxels1, shape2)
     } else if let Some(voxels2) = shape2.as_voxels() {
-        intersection_test_voxels_shape(dispatcher, &pos12.inverse(), voxels2, shape1)
+        intersection_test_voxels_shape(dispatcher, &pos12.inverse(), voxels2, shape1).swapped()
     } else {
-        false
+        ShapeIntersection::new(false)
     }
 }
 
@@ -26,7 +26,7 @@ pub fn intersection_test_voxels_shape<V: ?Sized + VoxelQuery>(
     pos12: &Pose,
     voxels1: &V,
     shape2: &dyn Shape,
-) -> bool {
+) -> ShapeIntersection {
     let radius1 = voxels1.voxel_size() / 2.0;
     let aabb1 = voxels1.local_aabb();
     let aabb2_1 = shape2.compute_aabb(pos12);
@@ -43,16 +43,17 @@ pub fn intersection_test_voxels_shape<V: ?Sized + VoxelQuery>(
             let cuboid1 = Cuboid::new(radius1);
             let cuboid_pose12 = Pose::from_translation(-center1) * pos12;
 
-            if dispatcher
-                .intersection_test(&cuboid_pose12, &cuboid1, shape2)
-                .unwrap_or(false)
-            {
-                return true;
+            if let Ok(result) = dispatcher.intersection_test(&cuboid_pose12, &cuboid1, shape2) {
+                if result.intersecting {
+                    // `shape2` may be a composite; keep the sub-shape it reported.
+                    return ShapeIntersection::new(true)
+                        .with_subshapes(vox1.linear_id(), result.subshape2);
+                }
             }
         }
     }
 
-    false
+    ShapeIntersection::new(false)
 }
 
 /// Checks for any intersection between voxels and an arbitrary shape.
@@ -63,6 +64,6 @@ pub fn intersection_test_shape_voxels<V: ?Sized + VoxelQuery>(
     pos12: &Pose,
     shape1: &dyn Shape,
     voxels2: &V,
-) -> bool {
-    intersection_test_voxels_shape(dispatcher, &pos12.inverse(), voxels2, shape1)
+) -> ShapeIntersection {
+    intersection_test_voxels_shape(dispatcher, &pos12.inverse(), voxels2, shape1).swapped()
 }

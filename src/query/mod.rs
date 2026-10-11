@@ -29,12 +29,13 @@ pub use self::closest_points::{closest_points, ClosestPoints};
 pub use self::contact::{contact, Contact};
 #[cfg(feature = "alloc")]
 pub use self::contact_manifolds::{
-    ContactManifold, ContactManifoldsWorkspace, TrackedContact, TypedWorkspaceData, WorkspaceData,
+    ContactManifold, ContactManifoldsWorkspace, TrackedContact, TypedWorkspaceData,
+    UnknownContactManifoldsWorkspace, WorkspaceData,
 };
 pub use self::default_query_dispatcher::DefaultQueryDispatcher;
-pub use self::distance::distance;
+pub use self::distance::{distance, ShapeDistance};
 pub use self::error::Unsupported;
-pub use self::intersection_test::intersection_test;
+pub use self::intersection_test::{intersection_test, ShapeIntersection};
 pub use self::nonlinear_shape_cast::{cast_shapes_nonlinear, NonlinearRigidMotion};
 pub use self::point::{PointProjection, PointQuery, PointQueryWithLocation};
 #[cfg(feature = "alloc")]

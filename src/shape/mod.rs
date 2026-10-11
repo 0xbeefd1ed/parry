@@ -3,7 +3,7 @@
 pub use self::ball::Ball;
 pub use self::capsule::Capsule;
 pub use self::cuboid::Cuboid;
-pub use self::feature_id::{FeatureId, PackedFeatureId};
+pub use self::feature_id::{FeatureId, PackedFeatureId, SubShapeId};
 pub use self::half_space::HalfSpace;
 pub use self::polygonal_feature_map::PolygonalFeatureMap;
 pub use self::round_shape::RoundShape;
@@ -28,8 +28,7 @@ pub use self::{
     },
 };
 
-// `PolylineFlags` is a 2D-only feature.
-#[cfg(all(feature = "dim2", feature = "alloc"))]
+#[cfg(feature = "alloc")]
 pub use self::polyline::PolylineFlags;
 
 #[cfg(feature = "dim2")]

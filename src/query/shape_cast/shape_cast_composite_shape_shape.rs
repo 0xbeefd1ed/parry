@@ -3,14 +3,15 @@ use crate::math::{Pose, Real, Vector};
 use crate::partitioning::BvhNode;
 use crate::query::shape_cast::ShapeCastOptions;
 use crate::query::{QueryDispatcher, Ray, RayCast, ShapeCastHit};
-use crate::shape::{CompositeShapeRef, Shape, TypedCompositeShape};
+use crate::shape::{CompositeShapeRef, Shape, SubShapeId, TypedCompositeShape};
 
 impl<S: ?Sized + TypedCompositeShape> CompositeShapeRef<'_, S> {
     /// Performs a shape-cast between `self` and a `shape2` positioned at `pose12` and subject to
     /// a linear velocity `vel12`, relative to `self`.
     ///
-    /// Returns the shape-cast hit (if any) as well as the index of the sub-shape of `self` involved
-    /// in the hit.
+    /// Returns the index of the sub-shape of `self` that was involved alongside the hit, which is
+    /// left as that sub-shape reported it (its `subshape1` is the sub-shape's own when it is a
+    /// composite too, and `subshape2` is `g2`'s).
     pub fn cast_shape<D: ?Sized + QueryDispatcher>(
         &self,
         dispatcher: &D,
@@ -18,7 +19,7 @@ impl<S: ?Sized + TypedCompositeShape> CompositeShapeRef<'_, S> {
         vel12: Vector,
         g2: &dyn Shape,
         options: ShapeCastOptions,
-    ) -> Option<(u32, ShapeCastHit)> {
+    ) -> Option<(SubShapeId, ShapeCastHit)> {
         let ls_aabb2 = g2.compute_aabb(pose12);
         let ray = Ray::new(Vector::ZERO, vel12);
         let msum_shift = -ls_aabb2.center();
@@ -77,7 +78,10 @@ where
 {
     CompositeShapeRef(g1)
         .cast_shape(dispatcher, pos12, vel12, g2, options)
-        .map(|hit| hit.1)
+        .map(|(part_id, mut hit)| {
+            hit.subshape1 = part_id;
+            hit
+        })
 }
 
 /// Time Of Impact of any shape with a composite shape, under translational movement.

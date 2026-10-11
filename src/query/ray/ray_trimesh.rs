@@ -1,6 +1,6 @@
 use crate::math::Real;
 use crate::query::{Ray, RayCast, RayIntersection};
-use crate::shape::{CompositeShapeRef, FeatureId, TriMesh};
+use crate::shape::{CompositeShapeRef, TriMesh};
 
 #[cfg(feature = "dim3")]
 pub use ray_cast_with_culling::RayCullingMode;
@@ -22,16 +22,7 @@ impl RayCast for TriMesh {
     ) -> Option<RayIntersection> {
         CompositeShapeRef(self)
             .cast_local_ray_and_get_normal(ray, max_time_of_impact, solid)
-            .map(|(best, mut res)| {
-                // We hit a backface.
-                // NOTE: we need this for `TriMesh::is_backface` to work properly.
-                if res.feature == FeatureId::Face(1) {
-                    res.feature = FeatureId::Face(best + self.indices().len() as u32)
-                } else {
-                    res.feature = FeatureId::Face(best);
-                }
-                res
-            })
+            .map(|(triangle_id, hit)| hit.with_subshape(triangle_id))
     }
 }
 
@@ -43,7 +34,7 @@ mod ray_cast_with_culling {
     use crate::query::details::NormalConstraints;
     use crate::query::{Ray, RayIntersection};
     use crate::shape::{
-        CompositeShape, CompositeShapeRef, FeatureId, Shape, TriMesh, Triangle, TypedCompositeShape,
+        CompositeShape, CompositeShapeRef, Shape, TriMesh, Triangle, TypedCompositeShape,
     };
 
     /// Controls which side of a triangle a ray-cast is allowed to hit.
@@ -165,16 +156,7 @@ mod ray_cast_with_culling {
             };
             CompositeShapeRef(&mesh_with_culling)
                 .cast_local_ray_and_get_normal(ray, max_time_of_impact, false)
-                .map(|(best, mut res)| {
-                    // We hit a backface.
-                    // NOTE: we need this for `TriMesh::is_backface` to work properly.
-                    if res.feature == FeatureId::Face(1) {
-                        res.feature = FeatureId::Face(best + self.indices().len() as u32)
-                    } else {
-                        res.feature = FeatureId::Face(best);
-                    }
-                    res
-                })
+                .map(|(triangle_id, hit)| hit.with_subshape(triangle_id))
         }
     }
 
