@@ -4,7 +4,7 @@ use crate::query::{
     ContactManifold, ContactManifoldsWorkspace, PersistentQueryDispatcher, PointQuery,
     TypedWorkspaceData, WorkspaceData,
 };
-use crate::shape::{AxisMask, Cuboid, QueriedVoxel, Shape, SupportMap, VoxelQuery, VoxelType};
+use crate::shape::{AxisMask, Cuboid, QueriedVoxel, Shape, SupportMap, VoxelQuery, VoxelTypes};
 use crate::utils::hashmap::{Entry, HashMap};
 use crate::utils::PoseOpt;
 use alloc::{boxed::Box, vec::Vec};
@@ -150,14 +150,10 @@ pub fn contact_manifolds_voxels_shape<ManifoldData, ContactData, V>(
     };
 
     if let Some(intersection_aabb1) = aabb1.intersection(&aabb2_1) {
-        for vox1 in voxels1.voxels_intersecting_local_aabb(&intersection_aabb1) {
-            let vox_type1 = vox1.voxel_type();
-
-            // TODO: would be nice to have a strategy to handle interior voxels for depenetration.
-            if vox_type1 == VoxelType::Empty || vox_type1 == VoxelType::Interior {
-                continue;
-            }
-
+        // TODO: would be nice to have a strategy to handle interior voxels for depenetration.
+        for vox1 in voxels1
+            .voxels_intersecting_local_aabb_of_types(&intersection_aabb1, VoxelTypes::SURFACE)
+        {
             let canon1 = CanonicalVoxelShape::from_voxel(voxels1, &vox1);
 
             // TODO: could we refactor the workspace system between Voxels, HeightField, and CompoundShape?

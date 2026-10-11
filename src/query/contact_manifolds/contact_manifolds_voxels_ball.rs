@@ -3,7 +3,7 @@ use crate::math::{Pose, Real, Vector, VectorExt};
 use crate::query::{ContactManifold, PointQuery, TrackedContact};
 use crate::shape::{
     Ball, Cuboid, OctantPattern, PackedFeatureId, QueriedVoxel, Shape, VoxelQuery, VoxelState,
-    VoxelType,
+    VoxelTypes,
 };
 use alloc::vec::Vec;
 
@@ -58,15 +58,9 @@ pub fn contact_manifolds_voxels_ball<'a, ManifoldData, ContactData, V>(
     let aabb1 = voxels1.local_aabb().loosened(prediction / 2.0);
     let aabb2 = ball2.aabb(pos12).loosened(prediction / 2.0);
     if let Some(aabb_intersection) = aabb1.intersection(&aabb2) {
-        for vox1 in voxels1.voxels_intersecting_local_aabb(&aabb_intersection) {
-            match vox1.voxel_type() {
-                #[cfg(feature = "dim2")]
-                VoxelType::Vertex | VoxelType::Face => { /* Ok */ }
-                #[cfg(feature = "dim3")]
-                VoxelType::Vertex | VoxelType::Edge | VoxelType::Face => { /* Ok */ }
-                _ => continue,
-            }
-
+        for vox1 in
+            voxels1.voxels_intersecting_local_aabb_of_types(&aabb_intersection, VoxelTypes::SURFACE)
+        {
             detect_hit_voxel_ball(
                 *pos12,
                 vox1.center(),

@@ -75,6 +75,29 @@ pub trait VoxelQuery {
         maxs: IVector,
     ) -> impl Iterator<Item = Self::Voxel<'_>>;
 
+    /// Iterates through the voxels within the given semi-open grid coordinate range whose
+    /// [`QueriedVoxel::voxel_type`] is one of `types`.
+    ///
+    /// Implementations must yield every voxel with grid coordinates in `[mins, maxs)` and a
+    /// type contained in `types` exactly once, and must never yield any other voxel (in
+    /// particular, empty voxels are never yielded). Callers can therefore rely on the type
+    /// of every yielded voxel being in `types` without re-checking it.
+    ///
+    /// The default implementation filters [`Self::voxels_in_range`]. Storages that can skip
+    /// over voxels of unwanted types cheaply (e.g. by keeping per-type occupancy masks, or
+    /// by skipping whole regions known to only contain interior voxels) should override it:
+    /// most collision-detection algorithms only care about surface voxels
+    /// ([`VoxelTypes::SURFACE`]), which are typically a small fraction of all filled voxels.
+    fn voxels_in_range_of_types(
+        &self,
+        mins: IVector,
+        maxs: IVector,
+        types: VoxelTypes,
+    ) -> impl Iterator<Item = Self::Voxel<'_>> {
+        self.voxels_in_range(mins, maxs)
+            .filter(move |vox| types.contains_type(vox.voxel_type()))
+    }
+
     /// Iterates through every voxel of this shape.
     ///
     /// This is equivalent to [`Self::voxels_in_range`] applied to the whole [`Self::domain`].
@@ -87,6 +110,19 @@ pub trait VoxelQuery {
     fn voxels_intersecting_local_aabb(&self, aabb: &Aabb) -> impl Iterator<Item = Self::Voxel<'_>> {
         let [mins, maxs] = self.voxel_range_intersecting_local_aabb(aabb);
         self.voxels_in_range(mins, maxs)
+    }
+
+    /// Iterates through every voxel intersecting the given local-space AABB whose
+    /// [`QueriedVoxel::voxel_type`] is one of `types`.
+    ///
+    /// This is [`Self::voxels_in_range_of_types`] applied to the grid range covered by `aabb`.
+    fn voxels_intersecting_local_aabb_of_types(
+        &self,
+        aabb: &Aabb,
+        types: VoxelTypes,
+    ) -> impl Iterator<Item = Self::Voxel<'_>> {
+        let [mins, maxs] = self.voxel_range_intersecting_local_aabb(aabb);
+        self.voxels_in_range_of_types(mins, maxs, types)
     }
 
     /// The grid coordinates of the voxel containing the given local-space point.
@@ -140,6 +176,64 @@ pub trait VoxelQuery {
     fn local_aabb(&self) -> Aabb {
         let [mins, maxs] = self.domain();
         self.voxel_range_aabb(mins, maxs)
+    }
+}
+
+/// A set of non-empty [`VoxelType`]s, used to select voxels by type with
+/// [`VoxelQuery::voxels_in_range_of_types`].
+///
+/// There is no flag for [`VoxelType::Empty`]: the type-filtered queries only ever yield
+/// filled voxels.
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
+pub struct VoxelTypes(u8);
+
+bitflags::bitflags! {
+    impl VoxelTypes: u8 {
+        /// Voxels of type [`VoxelType::Vertex`].
+        const VERTEX = 1 << 0;
+        /// Voxels of type [`VoxelType::Edge`].
+        #[cfg(feature = "dim3")]
+        const EDGE = 1 << 1;
+        /// Voxels of type [`VoxelType::Face`].
+        const FACE = 1 << 2;
+        /// Voxels of type [`VoxelType::Interior`].
+        const INTERIOR = 1 << 3;
+        /// Every non-interior filled voxel, i.e., voxels with at least one empty neighbor
+        /// along a coordinate axis.
+        #[cfg(feature = "dim2")]
+        const SURFACE = Self::VERTEX.bits() | Self::FACE.bits();
+        /// Every non-interior filled voxel, i.e., voxels with at least one empty neighbor
+        /// along a coordinate axis.
+        #[cfg(feature = "dim3")]
+        const SURFACE = Self::VERTEX.bits() | Self::EDGE.bits() | Self::FACE.bits();
+    }
+}
+
+impl VoxelTypes {
+    /// The set containing only `voxel_type`, or the empty set if `voxel_type` is
+    /// [`VoxelType::Empty`].
+    pub const fn from_voxel_type(voxel_type: VoxelType) -> Self {
+        match voxel_type {
+            VoxelType::Empty => Self::empty(),
+            VoxelType::Vertex => Self::VERTEX,
+            #[cfg(feature = "dim3")]
+            VoxelType::Edge => Self::EDGE,
+            VoxelType::Face => Self::FACE,
+            VoxelType::Interior => Self::INTERIOR,
+        }
+    }
+
+    /// Does this set contain `voxel_type`?
+    ///
+    /// Always returns `false` for [`VoxelType::Empty`].
+    pub const fn contains_type(self, voxel_type: VoxelType) -> bool {
+        self.intersects(Self::from_voxel_type(voxel_type))
+    }
+}
+
+impl From<VoxelType> for VoxelTypes {
+    fn from(voxel_type: VoxelType) -> Self {
+        Self::from_voxel_type(voxel_type)
     }
 }
 
@@ -223,5 +317,56 @@ impl VoxelQuery for Voxels {
     #[inline]
     fn local_aabb(&self) -> Aabb {
         self.local_aabb()
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use alloc::vec::Vec;
+
+    #[test]
+    fn voxels_in_range_of_types_filters_by_type() {
+        // A 3x3(x3) block: only the center voxel is interior.
+        let mut keys = Vec::new();
+        for x in 0..3 {
+            for y in 0..3 {
+                #[cfg(feature = "dim2")]
+                keys.push(IVector::new(x, y));
+                #[cfg(feature = "dim3")]
+                for z in 0..3 {
+                    keys.push(IVector::new(x, y, z));
+                }
+            }
+        }
+        let voxels = Voxels::new(Vector::splat(1.0), &keys);
+        let [mins, maxs] = VoxelQuery::domain(&voxels);
+
+        let interior: Vec<_> = voxels
+            .voxels_in_range_of_types(mins, maxs, VoxelTypes::INTERIOR)
+            .map(|vox| vox.grid_coords())
+            .collect();
+        assert_eq!(interior, [IVector::splat(1)]);
+
+        let surface: Vec<_> = voxels
+            .voxels_in_range_of_types(mins, maxs, VoxelTypes::SURFACE)
+            .collect();
+        assert_eq!(surface.len(), keys.len() - 1);
+        assert!(surface
+            .iter()
+            .all(|vox| vox.voxel_type() != VoxelType::Interior));
+
+        let all = voxels.voxels_in_range_of_types(mins, maxs, VoxelTypes::all());
+        assert_eq!(all.count(), keys.len());
+        let none = voxels.voxels_in_range_of_types(mins, maxs, VoxelTypes::empty());
+        assert_eq!(none.count(), 0);
+    }
+
+    #[test]
+    fn voxel_types_contains_type() {
+        assert!(!VoxelTypes::all().contains_type(VoxelType::Empty));
+        assert!(VoxelTypes::SURFACE.contains_type(VoxelType::Vertex));
+        assert!(VoxelTypes::SURFACE.contains_type(VoxelType::Face));
+        assert!(!VoxelTypes::SURFACE.contains_type(VoxelType::Interior));
     }
 }

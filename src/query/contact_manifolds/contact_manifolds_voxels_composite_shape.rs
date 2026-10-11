@@ -8,7 +8,7 @@ use crate::query::{
     TypedWorkspaceData, WorkspaceData,
 };
 use crate::shape::{
-    CompositeShape, Cuboid, QueriedVoxel, Shape, SupportMap, VoxelQuery, VoxelType,
+    CompositeShape, Cuboid, QueriedVoxel, Shape, SupportMap, VoxelQuery, VoxelTypes,
 };
 use crate::utils::hashmap::Entry;
 use crate::utils::PoseOpt;
@@ -94,14 +94,10 @@ pub fn contact_manifolds_voxels_composite_shape<ManifoldData, ContactData, V>(
     };
 
     if let Some(intersection_aabb1) = aabb1.intersection(&aabb2_1) {
-        for vox1 in voxels1.voxels_intersecting_local_aabb(&intersection_aabb1) {
-            let vox_type1 = vox1.voxel_type();
-
-            // TODO: would be nice to have a strategy to handle interior voxels for depenetration.
-            if vox_type1 == VoxelType::Empty || vox_type1 == VoxelType::Interior {
-                continue;
-            }
-
+        // TODO: would be nice to have a strategy to handle interior voxels for depenetration.
+        for vox1 in voxels1
+            .voxels_intersecting_local_aabb_of_types(&intersection_aabb1, VoxelTypes::SURFACE)
+        {
             // PERF: could we avoid repeated BVH traversals involving the same canonical shape?
             //       The issue is that we need to figure out what contact manifolds are associated
             //       to that canonical shape so we can update the included contact bitmask (and

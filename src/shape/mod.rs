@@ -24,7 +24,7 @@ pub use self::{
     shared_shape::SharedShape,
     voxels::{
         AxisMask, OctantPattern, QueriedVoxel, VoxelData, VoxelQuery, VoxelState, VoxelType,
-        Voxels, VoxelsChunkRef,
+        VoxelTypes, Voxels, VoxelsChunkRef,
     },
 };
 

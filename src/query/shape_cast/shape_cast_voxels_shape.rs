@@ -1,6 +1,6 @@
 use crate::math::{IVector, IVectorExt, Pose, Real, Vector, VectorExt};
 use crate::query::{QueryDispatcher, ShapeCastHit, ShapeCastOptions};
-use crate::shape::{Cuboid, QueriedVoxel, Shape, VoxelQuery, VoxelType};
+use crate::shape::{Cuboid, QueriedVoxel, Shape, VoxelQuery, VoxelTypes};
 
 /// Time Of Impact of a voxels shape with any other shape, under a translational movement.
 ///
@@ -24,25 +24,25 @@ where
     let start_aabb2_1 = g2.compute_aabb(pos12);
 
     let mut check_voxels_in_range = |search_domain: [IVector; 2]| {
-        for vox in g1.voxels_in_range(search_domain[0], search_domain[1]) {
-            if vox.voxel_type() != VoxelType::Empty {
-                // PERF: could we check the canonical shape instead, and deduplicate accordingly?
-                let center = g1.voxel_center(vox.grid_coords());
-                let cuboid = Cuboid::new(g1.voxel_size() / 2.0);
-                let vox_pos12 = Pose::from_translation(center).inverse() * pos12;
-                if let Some(mut new_hit) = dispatcher
-                    .cast_shapes(&vox_pos12, vel12, &cuboid, g2, options)
-                    .ok()
-                    .flatten()
-                {
-                    if new_hit.time_of_impact < smallest_t {
-                        // The hit is expressed in the voxel cuboid's frame, i.e. the shape's
-                        // frame translated by `center`. Shift `witness1` back; the normals
-                        // and `witness2` are unaffected by a translation.
-                        new_hit.witness1 += center;
-                        smallest_t = new_hit.time_of_impact;
-                        hit = Some(new_hit);
-                    }
+        for vox in
+            g1.voxels_in_range_of_types(search_domain[0], search_domain[1], VoxelTypes::all())
+        {
+            // PERF: could we check the canonical shape instead, and deduplicate accordingly?
+            let center = g1.voxel_center(vox.grid_coords());
+            let cuboid = Cuboid::new(g1.voxel_size() / 2.0);
+            let vox_pos12 = Pose::from_translation(center).inverse() * pos12;
+            if let Some(mut new_hit) = dispatcher
+                .cast_shapes(&vox_pos12, vel12, &cuboid, g2, options)
+                .ok()
+                .flatten()
+            {
+                if new_hit.time_of_impact < smallest_t {
+                    // The hit is expressed in the voxel cuboid's frame, i.e. the shape's
+                    // frame translated by `center`. Shift `witness1` back; the normals
+                    // and `witness2` are unaffected by a translation.
+                    new_hit.witness1 += center;
+                    smallest_t = new_hit.time_of_impact;
+                    hit = Some(new_hit);
                 }
             }
         }
